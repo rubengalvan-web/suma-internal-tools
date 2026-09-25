@@ -7,7 +7,7 @@
  * After editing, bump `version` so phones pick up the change.
  */
 window.SUMA_CONFIG = {
-  version: "1.1.0",
+  version: "1.2.0",
 
   // One 4-digit PIN per person. Only the SHA-256 of "suma-tools:" + PIN is stored. See README.md to add someone.
   pinLength: 4,
@@ -24,6 +24,10 @@ window.SUMA_CONFIG = {
   ],
 
   locations: ["Lima", "Arizona", "Florida"],
+
+  // Google Sheet where inventory rows are pasted (opened from the "listo" screen).
+  // Keep the sheet shared only with the team: this repo is public, so the link is visible.
+  inventorySheetUrl: "https://docs.google.com/spreadsheets/d/13TDxnS9iR6hBNi4S1gopM6DOrTpyZy-owYsQtMkEpMU/edit?gid=0#gid=0",
 
   // Inventory: counted in bags (coffee) or units (snacks). Order here = column order in the copied row.
   inventory: [

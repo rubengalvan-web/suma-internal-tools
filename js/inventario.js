@@ -59,7 +59,9 @@
       '<div class="last-head"><span class="eyebrow">Último conteo en este teléfono</span>' +
       (last.copied ? '<span class="pill ok">' + S.icon("check") + "Copiado</span>" : '<span class="pill warn">Sin copiar</span>') + "</div>" +
       "<p><strong>" + S.esc(S.fmtShort(last.fecha)) + "</strong> · " + S.esc(last.lugar) + " · " + S.esc(last.nombre) + "</p>" +
-      '<button type="button" class="btn btn-ghost btn-block" data-act="copy-last">' + S.icon("copy") + "Copiar de nuevo</button></section>";
+      '<button type="button" class="btn btn-ghost btn-block" data-act="copy-last">' + S.icon("copy") + "Copiar de nuevo</button>" +
+      (C.inventorySheetUrl ? '<a class="link-btn block-link" href="' + S.esc(C.inventorySheetUrl) + '" target="_blank" rel="noopener">' + S.icon("sheet") + "Abrir hoja de inventario</a>" : "") +
+      "</section>";
   }
 
   /* ---------- 2. Count screen ---------- */
@@ -163,8 +165,14 @@
       '<div class="done-badge">' + S.icon("check") + "</div>" +
       '<h1 class="display center">Inventario guardado</h1>' +
       '<p class="lead center">' + S.esc(S.fmtShort(rec.fecha)) + " · " + S.esc(rec.lugar) + " · " + S.esc(rec.nombre) + "</p>" +
+      '<p class="step-label"><span>1</span>Copia la fila</p>' +
       '<button type="button" class="btn btn-accent btn-xl btn-block" id="copy">' + S.icon("copy") + "<span>Copiar</span></button>" +
-      '<p class="muted center" id="copy-help">Luego abre la hoja de Google, toca la primera celda vacía de la columna A y pega.</p>' +
+      (C.inventorySheetUrl ?
+        '<p class="step-label"><span>2</span>Pégala en la hoja de Google</p>' +
+        '<a class="btn btn-primary btn-lg btn-block" id="open-sheet" href="' + S.esc(C.inventorySheetUrl) + '" target="_blank" rel="noopener">' +
+        S.icon("sheet") + "Abrir hoja de inventario" + S.icon("external") + "</a>" +
+        '<p class="muted center">En la pestaña <strong>Inventario</strong>, toca <strong>una vez</strong> la primera celda vacía de la columna A (Fecha) y pega.</p>'
+        : '<p class="muted center">Luego abre la hoja de Google, toca la primera celda vacía de la columna A y pega.</p>') +
       '<section class="card"><h2 class="group-title">Lo que se copia</h2>' +
       '<ul class="summary">' + counted.map(function (p) {
         return '<li style="--accent:' + p.accent + '"><span>' + S.esc(p.name) + " <small>" + S.esc(p.variant) + "</small></span><strong>" +
@@ -172,9 +180,6 @@
       }).join("") + "</ul>" +
       (counted.length < items.length ? '<p class="muted small">' + (items.length - counted.length) + " productos sin contar quedan como celdas vacías.</p>" : "") +
       "</section>" +
-      '<div class="row-actions">' +
-      '<button type="button" class="link-btn" id="copy-head">' + S.icon("sheet") + "Copiar encabezados (solo la primera vez)</button>" +
-      "</div>" +
       '<div class="btn-row"><a class="btn btn-ghost" href="#/inventario/conteo">Nuevo conteo</a><a class="btn btn-ghost" href="#/">Volver al inicio</a></div>' +
       "</main>";
 
@@ -186,12 +191,11 @@
         S.store.set(LAST, rec);
         btn.classList.add("copied");
         btn.querySelector("span").textContent = "¡Copiado!";
-        S.toast("Fila copiada. Pégala en la hoja de Google.", "ok");
+        S.toast("Fila copiada. Ahora abre la hoja y pégala.", "ok");
+        var open = el.querySelector("#open-sheet");
+        if (open) open.classList.add("ready");
         setTimeout(function () { btn.classList.remove("copied"); btn.querySelector("span").textContent = "Copiar"; }, 2500);
       });
-    });
-    el.querySelector("#copy-head").addEventListener("click", function () {
-      S.copyText(headerRow()).then(function (ok) { if (ok) S.toast("Encabezados copiados. Pégalos en la fila 1.", "ok"); });
     });
   };
 

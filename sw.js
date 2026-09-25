@@ -1,6 +1,6 @@
 /* Offline support. Network first (so price/product edits show up right away), cache as fallback
    (so a count still opens in a storage room with bad wifi). Bump CACHE when you deploy changes. */
-var CACHE = "suma-tools-v1.1.0";
+var CACHE = "suma-tools-v1.2.0";
 var SHELL = [
   "./", "index.html", "manifest.json", "css/styles.css",
   "js/vendor/jspdf.umd.min.js", "js/config.js", "js/core.js", "js/inventario.js", "js/b2b.js", "js/app.js",
