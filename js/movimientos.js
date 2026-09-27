@@ -13,7 +13,13 @@
   function log() { return S.store.get(LOG, []); }
   function saveLog(l) { if (l.length > 500) l = l.slice(-500); S.store.set(LOG, l); }
   function pending() { return log().filter(function (m) { return !m.copied; }); }
-  S.movPending = function () { return pending().length; };
+  S.movPending = function () { return S.sync.enabled ? S.sync.pending() : pending().length; };
+  function markCopied(ids) {
+    var l = log();
+    l.forEach(function (x) { if (ids.indexOf(x.id) >= 0) x.copied = true; });
+    saveLog(l);
+  }
+  S.sync.hooks.movSent = function (id) { markCopied([id]); };
 
   // What a holder has, according to the movements recorded on THIS phone.
   function balance(holder) {
@@ -57,6 +63,7 @@
     m.id = newId(); m.por = S.user; m.registrado = S.nowStamp(); m.copied = false;
     var l = log(); l.push(m); saveLog(l);
     S.store.set(CURRENT, m.id);
+    S.sync.add({ id: m.id, tab: "Movimientos", head: HEAD, row: row(m).split("\t"), label: m.tipo + " · " + describe(m), onSent: "movSent" });
     return m;
   }
   function describe(m) {
@@ -293,18 +300,20 @@
     var m = l[idx];
     var title = { Carga: "Carga guardada", Entrega: "Entrega guardada", Venta: "Venta guardada", Muestra: "Muestra guardada" }[m.tipo];
     var back = m.tipo === "Carga" || m.tipo === "Entrega" ? "#/traslado" : "#/salidas";
-    var others = pending().filter(function (x) { return x.id !== m.id; }).length;
+    var live = S.sync.enabled;
+    var others = live ? 0 : pending().filter(function (x) { return x.id !== m.id; }).length;
 
     el.innerHTML = S.header(m.tipo, back) +
       '<main class="screen">' +
       '<div class="done-badge">' + S.icon("check") + "</div>" +
       '<h1 class="display center">' + title + "</h1>" +
       '<p class="lead center">' + S.esc(S.fmtShort(m.fecha)) + " · " + S.esc(describe(m)) + "</p>" +
-      '<p class="step-label"><span>1</span>Copia la fila</p>' +
-      '<button type="button" class="btn btn-accent btn-xl btn-block" id="copy">' + S.icon("copy") + "<span>Copiar</span></button>" +
-      '<p class="step-label"><span>2</span>Pégala en la pestaña Movimientos</p>' + sheetBtn("open-sheet") +
-      '<p class="muted center">En la pestaña <strong>Movimientos</strong>, toca <strong>una vez</strong> la primera celda vacía de la columna A (ID) y pega.</p>' +
-      '<section class="card"><h2 class="group-title">Lo que se copia</h2><ul class="summary">' +
+      (live ? S.sync.box(m.id) :
+        '<p class="step-label"><span>1</span>Copia la fila</p>' +
+        '<button type="button" class="btn btn-accent btn-xl btn-block" id="copy">' + S.icon("copy") + "<span>Copiar</span></button>" +
+        '<p class="step-label"><span>2</span>Pégala en la pestaña Movimientos</p>' + sheetBtn("open-sheet") +
+        '<p class="muted center">En la pestaña <strong>Movimientos</strong>, toca <strong>una vez</strong> la primera celda vacía de la columna A (ID) y pega.</p>') +
+      '<section class="card"><h2 class="group-title">' + (live ? "Lo que se guardó" : "Lo que se copia") + '</h2><ul class="summary">' +
       items.filter(function (p) { return m.items[p.sku]; }).map(function (p) {
         return '<li style="--accent:' + p.accent + '"><span>' + S.esc(p.name) + " <small>" + S.esc(p.variant) + "</small></span><strong>" +
           S.num(m.items[p.sku]) + " <small>" + S.esc(p.unit) + "</small></strong></li>";
@@ -315,8 +324,16 @@
         (others === 1 ? " movimiento más" : " movimientos más") + "</strong> sin copiar. Toca aquí para verlos.</div></a>" : "") +
       (m.tipo === "Carga" || m.tipo === "Entrega" ? S.carryCard() : "") +
       '<div class="btn-row"><a class="btn btn-ghost" href="' + back + '">Registrar otro</a><a class="btn btn-ghost" href="#/">Volver al inicio</a></div>' +
+      (live ? '<div class="row-actions"><button type="button" class="link-btn" id="copy-backup">' + S.icon("copy") + "Copiar fila (respaldo)</button></div>" : "") +
       "</main>";
 
+    if (live) {
+      S.sync.bind(el);
+      el.querySelector("#copy-backup").addEventListener("click", function () {
+        S.copyText(row(m)).then(function (ok) { if (ok) S.toast("Fila copiada.", "ok"); });
+      });
+      return;
+    }
     var btn = el.querySelector("#copy");
     btn.addEventListener("click", function () {
       S.copyText(row(m)).then(function (ok) {
@@ -334,6 +351,7 @@
 
   /* ---------- 4. Movements not yet copied ---------- */
   S.routes["/pendientes"] = function (el) {
+    if (S.sync.enabled) { renderQueue(el); return; }
     var list = pending().slice().reverse();
     el.innerHTML = S.header("Sin copiar") +
       '<main class="screen">' +
@@ -351,11 +369,7 @@
         : '<p class="lead">Todo está copiado. No hay movimientos pendientes.</p><a class="btn btn-primary btn-lg btn-block" href="#/">Volver al inicio</a>') +
       "</main>";
 
-    function mark(ids) {
-      var l = log();
-      l.forEach(function (x) { if (ids.indexOf(x.id) >= 0) x.copied = true; });
-      saveLog(l);
-    }
+    var mark = markCopied;
     var all = el.querySelector("#copy-all");
     if (all) all.addEventListener("click", function () {
       var rows = list.slice().reverse();          // oldest first, like the sheet
@@ -379,4 +393,46 @@
       });
     });
   };
+
+  /* ---------- 5. Records not yet in the sheet (direct-save mode) ---------- */
+  function renderQueue(el) {
+    function paint() {
+      var q = S.sync.items().slice().reverse();
+      el.innerHTML = S.header("Sin enviar") +
+        '<main class="screen">' +
+        '<p class="eyebrow">Hoja de Google</p>' +
+        '<h1 class="display sm">Sin enviar a la hoja</h1>' +
+        (q.length
+          ? '<p class="lead">Estos registros están guardados en este teléfono y se envían solos cuando hay internet.</p>' +
+            '<button type="button" class="btn btn-accent btn-xl btn-block" id="retry">' + S.icon("refresh") + "<span>Enviar ahora (" + q.length + ")</span></button>" +
+            '<ul class="mov-list">' + q.map(function (it) {
+              return "<li><div><strong>" + S.esc(it.label || it.tab) + "</strong><br><small>" + S.esc(it.error || "Esperando para enviar…") + "</small></div>" +
+                '<button type="button" class="btn btn-ghost" data-manual="' + S.esc(it.id) + '" title="Copiar y pegarlo yo">' + S.icon("copy") + "</button></li>";
+            }).join("") + "</ul>" +
+            '<p class="muted small">Si algo no se envía por mucho tiempo, toca el botón de copiar de ese registro, pégalo tú en la pestaña ' +
+            "que corresponde y se quita de esta lista.</p>"
+          : '<p class="lead">Todo está en la hoja. No hay nada pendiente.</p><a class="btn btn-primary btn-lg btn-block" href="#/">Volver al inicio</a>') +
+        "</main>";
+    }
+    el.addEventListener("click", function (e) {
+      if (e.target.closest("#retry")) {
+        var b = el.querySelector("#retry span"); if (b) b.textContent = "Enviando…";
+        S.sync.flush().then(paint);
+        return;
+      }
+      var m = e.target.closest("[data-manual]");
+      if (!m) return;
+      var it = S.sync.items().filter(function (x) { return x.id === m.dataset.manual; })[0];
+      if (!it) return;
+      S.copyText(it.row.join("\t")).then(function (ok) {
+        if (!ok) return;
+        S.sync.remove(it.id);
+        if (it.onSent && S.sync.hooks[it.onSent]) S.sync.hooks[it.onSent](it.id);
+        S.toast("Fila copiada. Pégala en la pestaña " + it.tab + ".", "ok");
+        paint();
+      });
+    });
+    S.sync.on(function () { if (el.isConnected) paint(); });
+    paint();
+  }
 })();

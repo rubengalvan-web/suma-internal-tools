@@ -343,6 +343,8 @@
       if (log.length > 200) log = log.slice(-200);
       S.store.set(QUOTES, log);
       S.store.set(CURRENT, q.id);
+      S.sync.add({ id: q.id, tab: "Cotizaciones", head: HEAD, row: quoteRow(q).split("\t"),
+        label: "Cotización " + q.id + (q.cliente ? " · " + q.cliente : "") });
       S.go("#/b2b/cotizacion");
     });
     paint();
@@ -371,7 +373,8 @@
       '<label><input type="radio" name="qlang" value="en"' + (q.lang !== "es" ? " checked" : "") + "><span>PDF in English</span></label></div>" +
       '<button type="button" class="btn btn-accent btn-xl btn-block" id="share">' + S.icon("share") + "<span>Enviar PDF</span></button>" +
       '<p class="muted center">Se abre el menú para mandarlo por <strong>WhatsApp</strong>, correo o guardarlo en Archivos.</p>' +
-      '<button type="button" class="btn btn-primary btn-lg btn-block" id="copy">' + S.icon("copy") + "<span>Copiar fila para la hoja</span></button>" +
+      (S.sync.enabled ? S.sync.box(q.id) :
+      '<button type="button" class="btn btn-primary btn-lg btn-block" id="copy">' + S.icon("copy") + "<span>Copiar fila para la hoja</span></button>") +
       (C.quotesSheetUrl ? '<a class="link-btn block-link" href="' + S.esc(C.quotesSheetUrl) + '" target="_blank" rel="noopener">' + S.icon("sheet") + "Abrir hoja · pestaña Cotizaciones</a>" : "") +
       '<div class="preview" id="preview">' + quoteDoc(q) + "</div>" +
       '<div class="row-actions">' +
@@ -392,8 +395,9 @@
       var out = makePDF(q);
       if (out) downloadBlob(out.blob, out.name);
     });
+    if (S.sync.enabled) S.sync.bind(el);
     var btn = el.querySelector("#copy");
-    btn.addEventListener("click", function () {
+    if (btn) btn.addEventListener("click", function () {
       S.copyText(quoteRow(q)).then(function (ok) {
         if (!ok) return;
         q.copied = true; save();

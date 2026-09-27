@@ -402,3 +402,16 @@ button { cursor: pointer; }
   .hero-inner { padding: 60px 20px 40px; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* ---------- direct save to the sheet ---------- */
+.sync-box { display: flex; gap: 12px; align-items: flex-start; padding: 16px; border-radius: 14px; margin: 18px 0 12px; font-size: 15px; border: 1.5px solid var(--line); background: var(--card); }
+.sync-box:empty { display: none; }
+.sync-box strong { display: block; font: 800 18px/1.2 var(--font-display); text-transform: uppercase; letter-spacing: 0.03em; }
+.sync-box small { display: block; color: var(--ink-soft); margin-top: 3px; }
+.sync-box .ico { width: 28px; height: 28px; flex: none; }
+.sync-box.sent { background: #E3EBD3; border-color: var(--sage); color: var(--forest); }
+.sync-box.error { background: #FDE3D2; border-color: var(--orange); color: #5a2a10; }
+.sync-box.error .ico { color: var(--terracotta); }
+.sync-box .link-btn { padding: 6px 0 0; min-height: 36px; }
+.spinner { width: 24px; height: 24px; flex: none; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--forest); animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }

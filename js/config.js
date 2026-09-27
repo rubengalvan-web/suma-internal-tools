@@ -7,7 +7,7 @@
  * After editing, bump `version` so phones pick up the change.
  */
 window.SUMA_CONFIG = {
-  version: "2.1.0",
+  version: "2.3.0",
 
   // One 4-digit PIN per person. Only the SHA-256 of "suma-tools:" + PIN is stored. See README.md to add someone.
   // home = the location where stock handed to this person is counted (used by "Entregar" in Traslados).
@@ -30,6 +30,9 @@ window.SUMA_CONFIG = {
   // Google Sheet where inventory rows are pasted (opened from the "listo" screen).
   // Keep the sheet shared only with the team: this repo is public, so the link is visible.
   inventorySheetUrl: "https://docs.google.com/spreadsheets/d/13TDxnS9iR6hBNi4S1gopM6DOrTpyZy-owYsQtMkEpMU/edit",
+  // Direct save: paste the Apps Script web app URL here (ends in /exec). Leave "" to keep copy-and-paste.
+  sheetApiUrl: "https://script.google.com/macros/s/AKfycbx8_g2zjntCx_cFt1OtsV2hCapHOm-C-AxT-wRBP0O0OW6ExcVvgltIh3rg2o55zV7f/exec",
+
   // Same spreadsheet. Paste a tab-specific link (…#gid=123) here to open straight on the Movimientos / Cotizaciones tab.
   movementsSheetUrl: "https://docs.google.com/spreadsheets/d/13TDxnS9iR6hBNi4S1gopM6DOrTpyZy-owYsQtMkEpMU/edit",
   quotesSheetUrl: "https://docs.google.com/spreadsheets/d/13TDxnS9iR6hBNi4S1gopM6DOrTpyZy-owYsQtMkEpMU/edit",

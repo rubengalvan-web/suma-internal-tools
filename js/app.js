@@ -12,6 +12,7 @@
   }
   function unlocked() {
     var u = findUser(S.store.get("session", ""));
+    if (u && C.sheetApiUrl && !S.store.get("pin", "")) u = null;   // direct-save mode needs the PIN once
     S.user = u ? u.name : "";
     return !!u;
   }
@@ -43,6 +44,8 @@
         var user = findUser(hash);
         if (user) {
           S.store.set("session", hash);
+          S.store.set("pin", entered);          // sent with each save so the sheet can check it
+          if (S.sync) S.sync.flush();
           label.textContent = "Hola, " + user.name;
           app.querySelector(".pin-dots").classList.add("ok");
           setTimeout(route, 350);
@@ -84,7 +87,8 @@
       '<h1 class="display">Hola, ' + S.esc(S.user) + "</h1>" +
       '<p class="lead">¿Qué vamos a hacer hoy?</p>' +
       (S.movPending && S.movPending() ? '<a class="callout warn pending-link" href="#/pendientes">' + S.icon("alert") + "<div>Tienes <strong>" + S.movPending() +
-        (S.movPending() === 1 ? " movimiento" : " movimientos") + "</strong> sin copiar a la hoja. Toca aquí para copiarlos.</div></a>" : "") +
+        (S.sync.enabled ? (S.movPending() === 1 ? " registro" : " registros") + "</strong> sin enviar a la hoja. Se envían solos con internet; toca para verlos.</div></a>"
+          : (S.movPending() === 1 ? " movimiento" : " movimientos") + "</strong> sin copiar a la hoja. Toca aquí para copiarlos.</div></a>") : "") +
       '<nav class="tiles" aria-label="Herramientas">' +
       C.tools.map(function (t) {
         return '<a class="tile" href="' + t.route + '" style="--accent:' + t.accent + '">' +
@@ -99,6 +103,7 @@
       "</main>";
     el.querySelector('[data-act="lock"]').addEventListener("click", function () {
       S.store.del("session");
+      S.store.del("pin");
       route();
     });
   };
@@ -106,6 +111,7 @@
   /* ---------- router ---------- */
   function route() {
     document.onkeydown = null;
+    if (S.sync) S.sync.reset();
     if (!unlocked()) { renderPin(); return; }
     var path = location.hash.replace(/^#/, "") || "/";
     var fn = S.routes[path];

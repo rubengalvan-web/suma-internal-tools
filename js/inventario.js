@@ -59,7 +59,8 @@
   function lastCard(last) {
     return '<section class="card last-card">' +
       '<div class="last-head"><span class="eyebrow">Último conteo en este teléfono</span>' +
-      (last.copied ? '<span class="pill ok">' + S.icon("check") + "Copiado</span>" : '<span class="pill warn">Sin copiar</span>') + "</div>" +
+      (S.sync.enabled && last.id ? (S.sync.state(last.id).st === "sent" ? '<span class="pill ok">' + S.icon("check") + "En la hoja</span>" : '<span class="pill warn">Sin enviar</span>') :
+        last.copied ? '<span class="pill ok">' + S.icon("check") + "Copiado</span>" : '<span class="pill warn">Sin copiar</span>') + "</div>" +
       "<p><strong>" + S.esc(S.fmtShort(last.fecha)) + "</strong> · " + S.esc(last.lugar) + " · " + S.esc(last.nombre) + "</p>" +
       '<button type="button" class="btn btn-ghost btn-block" data-act="copy-last">' + S.icon("copy") + "Copiar de nuevo</button>" +
       (C.inventorySheetUrl ? '<a class="link-btn block-link" href="' + S.esc(C.inventorySheetUrl) + '" target="_blank" rel="noopener">' + S.icon("sheet") + "Abrir hoja de inventario</a>" : "") +
@@ -142,13 +143,15 @@
           var box = sheet.querySelector("#meta-err");
           if (err) { box.textContent = err; box.hidden = false; return; }
           var rec = {
-            fecha: fecha, nombre: nombre, lugar: lugar,
+            id: S.newId("C"), fecha: fecha, nombre: nombre, lugar: lugar,
             items: JSON.parse(JSON.stringify(draft)),
             registrado: S.nowStamp(), copied: false
           };
           S.store.set(LAST, rec);
           S.store.set(PREFS, { nombre: nombre, lugar: lugar });
           S.store.del(DRAFT);
+          S.sync.add({ id: rec.id, tab: "Inventario", head: headerRow().split("\t"), row: dataRow(rec).split("\t"),
+            label: "Conteo · " + rec.lugar + " · " + S.fmtShort(rec.fecha) });
           close();
           S.go("#/inventario/listo");
         });
@@ -161,12 +164,16 @@
     var rec = S.store.get(LAST, null);
     if (!rec) { S.go("#/inventario"); return; }
     var counted = items.filter(function (p) { return rec.items[p.sku] != null; });
+    var live = S.sync.enabled && rec.id;
 
     el.innerHTML = S.header("Inventario", "#/inventario") +
       '<main class="screen">' +
       '<div class="done-badge">' + S.icon("check") + "</div>" +
       '<h1 class="display center">Inventario guardado</h1>' +
       '<p class="lead center">' + S.esc(S.fmtShort(rec.fecha)) + " · " + S.esc(rec.lugar) + " · " + S.esc(rec.nombre) + "</p>" +
+      (live ? S.sync.box(rec.id) +
+        (C.inventorySheetUrl ? '<a class="btn btn-ghost btn-lg btn-block" href="' + S.esc(C.inventorySheetUrl) + '" target="_blank" rel="noopener">' +
+          S.icon("sheet") + "Ver hoja de inventario" + S.icon("external") + "</a>" : "") :
       '<p class="step-label"><span>1</span>Copia la fila</p>' +
       '<button type="button" class="btn btn-accent btn-xl btn-block" id="copy">' + S.icon("copy") + "<span>Copiar</span></button>" +
       (C.inventorySheetUrl ?
@@ -174,8 +181,8 @@
         '<a class="btn btn-primary btn-lg btn-block" id="open-sheet" href="' + S.esc(C.inventorySheetUrl) + '" target="_blank" rel="noopener">' +
         S.icon("sheet") + "Abrir hoja de inventario" + S.icon("external") + "</a>" +
         '<p class="muted center">En la pestaña <strong>Inventario</strong>, toca <strong>una vez</strong> la primera celda vacía de la columna A (Fecha) y pega.</p>'
-        : '<p class="muted center">Luego abre la hoja de Google, toca la primera celda vacía de la columna A y pega.</p>') +
-      '<section class="card"><h2 class="group-title">Lo que se copia</h2>' +
+        : '<p class="muted center">Luego abre la hoja de Google, toca la primera celda vacía de la columna A y pega.</p>')) +
+      '<section class="card"><h2 class="group-title">' + (live ? "Lo que se guardó" : "Lo que se copia") + "</h2>" +
       '<ul class="summary">' + counted.map(function (p) {
         return '<li style="--accent:' + p.accent + '"><span>' + S.esc(p.name) + " <small>" + S.esc(p.variant) + "</small></span><strong>" +
           S.num(rec.items[p.sku]) + " <small>" + S.esc(p.unit) + "</small></strong></li>";
@@ -183,8 +190,16 @@
       (counted.length < items.length ? '<p class="muted small">' + (items.length - counted.length) + " productos sin contar quedan como celdas vacías.</p>" : "") +
       "</section>" +
       '<div class="btn-row"><a class="btn btn-ghost" href="#/inventario/conteo">Nuevo conteo</a><a class="btn btn-ghost" href="#/">Volver al inicio</a></div>' +
+      (live ? '<div class="row-actions"><button type="button" class="link-btn" id="copy-backup">' + S.icon("copy") + "Copiar fila (respaldo)</button></div>" : "") +
       "</main>";
 
+    if (live) {
+      S.sync.bind(el);
+      el.querySelector("#copy-backup").addEventListener("click", function () {
+        S.copyText(dataRow(rec)).then(function (ok) { if (ok) S.toast("Fila copiada.", "ok"); });
+      });
+      return;
+    }
     var btn = el.querySelector("#copy");
     btn.addEventListener("click", function () {
       S.copyText(dataRow(rec)).then(function (ok) {
