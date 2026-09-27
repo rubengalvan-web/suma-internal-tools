@@ -1,9 +1,9 @@
 /* Offline support. Network first (so price/product edits show up right away), cache as fallback
    (so a count still opens in a storage room with bad wifi). Bump CACHE when you deploy changes. */
-var CACHE = "suma-tools-v1.2.0";
+var CACHE = "suma-tools-v2.1.0";
 var SHELL = [
   "./", "index.html", "manifest.json", "css/styles.css",
-  "js/vendor/jspdf.umd.min.js", "js/config.js", "js/core.js", "js/inventario.js", "js/b2b.js", "js/app.js",
+  "js/vendor/jspdf.umd.min.js", "js/config.js", "js/core.js", "js/inventario.js", "js/b2b.js", "js/movimientos.js", "js/app.js",
   "assets/logo-wordmark.png", "assets/logo-wordmark-dark.png", "assets/logo-pdf.png",
   "assets/icons/apple-touch-icon.png", "assets/icons/icon-192.png", "assets/icons/icon-512.png", "assets/icons/favicon.png"
 ];

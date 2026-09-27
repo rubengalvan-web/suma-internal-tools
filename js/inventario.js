@@ -31,6 +31,8 @@
       '<h1 class="display">Conteo de inventario</h1>' +
       '<p class="lead">Cuenta lo que hay en tu ubicación. Al terminar, tocas <strong>Copiar</strong> y pegas la fila en la hoja de Google del equipo.</p>' +
       '<a class="btn btn-primary btn-lg btn-block" href="#/inventario/conteo">Empezar conteo de inventario</a>' +
+      '<a class="btn btn-ghost btn-lg btn-block second-btn" href="#/traslado">' + S.icon("truck") + "Registrar traslado</a>" +
+      (S.carryCard ? S.carryCard() : "") +
       (nDraft ? '<p class="note">Tienes un conteo en curso (' + nDraft + " de " + items.length + ' productos). Se retoma donde lo dejaste. ' +
         '<button type="button" class="link-btn danger" data-act="discard">Descartar</button></p>' : "") +
       (last ? lastCard(last) : "") +

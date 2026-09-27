@@ -83,6 +83,8 @@
       '<p class="eyebrow">' + greeting() + "</p>" +
       '<h1 class="display">Hola, ' + S.esc(S.user) + "</h1>" +
       '<p class="lead">¿Qué vamos a hacer hoy?</p>' +
+      (S.movPending && S.movPending() ? '<a class="callout warn pending-link" href="#/pendientes">' + S.icon("alert") + "<div>Tienes <strong>" + S.movPending() +
+        (S.movPending() === 1 ? " movimiento" : " movimientos") + "</strong> sin copiar a la hoja. Toca aquí para copiarlos.</div></a>" : "") +
       '<nav class="tiles" aria-label="Herramientas">' +
       C.tools.map(function (t) {
         return '<a class="tile" href="' + t.route + '" style="--accent:' + t.accent + '">' +

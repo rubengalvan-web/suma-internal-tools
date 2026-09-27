@@ -13,13 +13,21 @@
     return null;
   }
 
+  function commercialPerLb() { return S.round2(B.commercial.coffeeBagPrice * LB_G / B.commercial.coffeeBagGrams); }
+  function shippingFor(lb) {
+    var sh = B.shipping;
+    if (!lb) return 0;
+    return lb <= sh.includedLb ? sh.flatFee : S.round2(sh.flatFee + sh.perExtraLb * (lb - sh.includedLb));
+  }
+
   function compute(form) {
-    var lines = [], coffeeLb = 0, snackU = 0;
+    var lines = [], coffeeLb = 0, snackU = 0, weight = 0;
     B.products.forEach(function (p) {
       var q = S.parseQty(form.qty[p.id]);
       if (!q) return;
       lines.push({ id: p.id, kind: p.kind, name: p.name, es: p.es, en: p.en, accent: p.accent, q: q });
-      if (p.kind === "coffee") coffeeLb += q; else snackU += q;
+      if (p.kind === "coffee") { coffeeLb += q; weight += q; }
+      else { snackU += q; weight += q * (p.grams || 0) / LB_G; }
     });
     coffeeLb = S.round2(coffeeLb);
     var negotiable = coffeeLb >= B.coffee.negotiableFromLb;
@@ -28,23 +36,38 @@
     var tier = snackTier(snackU);
     var snackRate = tier ? tier.pricePerUnit : null;
     var belowMin = snackU > 0 && snackU < B.snacks.minimumUnits;
-    var coffeeSub = 0, snackSub = 0, pending = false;
+    var comLb = commercialPerLb();
+    var coffeeSub = 0, snackSub = 0, pending = false, commercialValue = 0;
     lines.forEach(function (l) {
       l.unit = l.kind === "coffee" ? "lb" : "u";
       l.price = l.kind === "coffee" ? coffeeRate : snackRate;
+      l.commercial = l.kind === "coffee" ? comLb : B.commercial.snackUnitPrice;
+      l.commercialTotal = S.round2(l.q * l.commercial);
       l.total = l.price == null ? null : S.round2(l.q * l.price);
       if (l.total == null) pending = true;
-      else if (l.kind === "coffee") coffeeSub += l.total; else snackSub += l.total;
+      else {
+        commercialValue += l.commercialTotal;
+        if (l.kind === "coffee") coffeeSub += l.total; else snackSub += l.total;
+      }
     });
+    var total = S.round2(coffeeSub + snackSub);
+    var shipLb = weight > 0 ? Math.ceil(weight - 1e-9) : 0;       // round partial pounds up
+    var shipping = shippingFor(shipLb);
+    commercialValue = S.round2(commercialValue);
+    var savings = S.round2(commercialValue - total);
     return {
       lines: lines, coffeeLb: coffeeLb, snackU: snackU,
       negotiable: negotiable, negotiatedRate: negotiable && agreed > 0 ? agreed : null,
       coffeeRate: coffeeRate, snackRate: snackRate, belowMin: belowMin, pending: pending,
-      coffeeSub: S.round2(coffeeSub), snackSub: S.round2(snackSub), total: S.round2(coffeeSub + snackSub),
+      coffeeSub: S.round2(coffeeSub), snackSub: S.round2(snackSub), total: total,
+      commercialPerLb: comLb, commercialValue: commercialValue, savings: savings,
+      savingsPct: commercialValue > 0 ? savings / commercialValue : 0,
+      weightLb: S.round2(weight), shipLb: shipLb, shipping: shipping, grandTotal: S.round2(total + shipping),
       hasCoffee: coffeeLb > 0, hasSnacks: snackU > 0,
       canQuote: lines.length > 0 && !belowMin
     };
   }
+  function pct(x) { return Math.round(x * 100) + "%"; }
   function perShot(rate) { return S.round2(rate / LB_G * B.coffee.doseShotG); }
   function perBev(rate) { return S.round2(rate / LB_G * B.coffee.doseBeverageG); }
 
@@ -54,6 +77,11 @@
       kicker: "Cotización mayorista", title: "Café de especialidad y snacks andinos",
       quoteNo: "Cotización", date: "Fecha", validUntil: "Válida hasta", preparedFor: "Preparada para", from: "De", by: "Atendido por",
       product: "Producto", qty: "Cantidad", unitPrice: "Precio unitario", lineTotal: "Total",
+      retail: "Precio comercial", wholesale: "Precio mayorista", retailValue: "Valor a precio comercial",
+      savings: "Ahorro mayorista", subtotal: "Subtotal mayorista", shipping: "Envío",
+      saveBanner: function (a, p) { return "Ahorras " + a + " (" + p + ") frente al precio comercial"; },
+      shipTerm: function (f, i, x) { return "Envío: " + f + " por las primeras " + i + " lb, más " + x + " por cada libra adicional (peso de café y snacks, redondeado a la libra siguiente)."; },
+      retailTerm: "Precio comercial = precio de venta al público en sumaorganics.com.",
       coffeeSub: "Subtotal café", snackSub: "Subtotal snacks", total: "Total", tbc: "Por confirmar",
       negotiable: "Negociable — consúltanos", u: "u.", perU: "/ u.", perLb: "/ lb",
       terms: "Condiciones",
@@ -73,6 +101,11 @@
       kicker: "Wholesale quote", title: "Specialty coffee & Andean snacks",
       quoteNo: "Quote", date: "Date", validUntil: "Valid until", preparedFor: "Prepared for", from: "From", by: "Prepared by",
       product: "Product", qty: "Quantity", unitPrice: "Unit price", lineTotal: "Total",
+      retail: "Retail price", wholesale: "Wholesale price", retailValue: "Retail value",
+      savings: "Wholesale savings", subtotal: "Wholesale subtotal", shipping: "Shipping",
+      saveBanner: function (a, p) { return "You save " + a + " (" + p + ") vs. retail"; },
+      shipTerm: function (f, i, x) { return "Shipping: " + f + " for the first " + i + " lb, plus " + x + " per additional lb (coffee and snack weight, rounded up to the next pound)."; },
+      retailTerm: "Retail price = SUMA's public price at sumaorganics.com.",
       coffeeSub: "Coffee subtotal", snackSub: "Snacks subtotal", total: "Total", tbc: "To be confirmed",
       negotiable: "Negotiable — contact us", u: "units", perU: "/ unit", perLb: "/ lb",
       terms: "Terms",
@@ -100,7 +133,8 @@
 
   function termsList(q, t) {
     var c = q.calc;
-    var terms = [t.lead(B.leadTimeBusinessDays), t.validity(B.validityCalendarDays, S.fmtDate(q.validUntil, q.lang)), t.prices];
+    var terms = [t.lead(B.leadTimeBusinessDays), t.validity(B.validityCalendarDays, S.fmtDate(q.validUntil, q.lang)), t.prices,
+      t.shipTerm(S.money(B.shipping.flatFee), B.shipping.includedLb, S.money(B.shipping.perExtraLb)), t.retailTerm];
     if (c.hasCoffee && c.negotiatedRate) terms.push(t.agreed(S.money(c.negotiatedRate)));
     if (c.hasCoffee && c.negotiable && !c.negotiatedRate) terms.push(t.pendingNote);
     if (c.hasCoffee && c.coffeeRate) terms.push(t.shotRef(S.money(c.coffeeRate), S.money(perShot(c.coffeeRate)), S.money(perBev(c.coffeeRate))));
@@ -112,9 +146,11 @@
     var t = T[q.lang] || T.en, c = q.calc;
     var rows = c.lines.map(function (l) {
       var unitLabel = l.kind === "coffee" ? "lb" : t.u;
-      var price = l.price == null ? '<span class="neg">' + t.negotiable + "</span>" : S.money(l.price) + " " + (l.kind === "coffee" ? t.perLb : t.perU);
+      var per = l.kind === "coffee" ? t.perLb : t.perU;
+      var price = l.price == null ? '<span class="neg">' + t.negotiable + "</span>" : S.money(l.price) + " " + per;
       return "<tr><td><strong>" + S.esc(l.name) + "</strong><small>" + S.esc(l[q.lang] || l.en) + "</small></td>" +
         '<td class="num">' + S.num(l.q) + " " + unitLabel + "</td>" +
+        '<td class="num"><span class="strike">' + S.money(l.commercial) + " " + per + "</span></td>" +
         '<td class="num">' + price + "</td>" +
         '<td class="num">' + (l.total == null ? '<span class="neg">' + t.tbc + "</span>" : S.money(l.total)) + "</td></tr>";
     }).join("");
@@ -134,12 +170,15 @@
       '<div class="qdoc-parties">' +
       '<div><span class="k">' + t.preparedFor + "</span><p>" + party + "</p></div>" +
       '<div><span class="k">' + t.from + "</span><p><strong>" + K.company + "</strong><br>" + (q.preparedBy ? t.by + " " + S.esc(q.preparedBy) + "<br>" : "") + K.city + "<br>" + K.email + "<br>" + K.web + "</p></div></div>" +
-      '<table class="qdoc-lines"><thead><tr><th>' + t.product + '</th><th class="num">' + t.qty + '</th><th class="num">' + t.unitPrice + '</th><th class="num">' + t.lineTotal + "</th></tr></thead>" +
+      '<table class="qdoc-lines"><thead><tr><th>' + t.product + '</th><th class="num">' + t.qty + '</th><th class="num">' + t.retail + '</th><th class="num">' + t.wholesale + '</th><th class="num">' + t.lineTotal + "</th></tr></thead>" +
       "<tbody>" + rows + "</tbody></table>" +
       '<div class="qdoc-totals">' +
-      (c.hasCoffee && c.hasSnacks ? "<div><span>" + t.coffeeSub + "</span><span>" + (c.coffeeRate == null ? t.tbc : S.money(c.coffeeSub)) + "</span></div>" +
-        "<div><span>" + t.snackSub + "</span><span>" + S.money(c.snackSub) + "</span></div>" : "") +
-      '<div class="grand"><span>' + t.total + " (USD)</span><span>" + (c.pending ? t.tbc : S.money(c.total)) + "</span></div></div>" +
+      (!c.pending && c.savings > 0 ? '<div class="qdoc-save">' + S.esc(t.saveBanner(S.money(c.savings), pct(c.savingsPct))) + "</div>" +
+        '<div class="muted-row"><span>' + t.retailValue + "</span><span>" + S.money(c.commercialValue) + "</span></div>" +
+        '<div class="save-row"><span>' + t.savings + "</span><span>−" + S.money(c.savings) + " (" + pct(c.savingsPct) + ")</span></div>" : "") +
+      "<div><span>" + t.subtotal + "</span><span>" + (c.pending ? t.tbc : S.money(c.total)) + "</span></div>" +
+      "<div><span>" + t.shipping + " (" + c.shipLb + " lb)</span><span>" + S.money(c.shipping) + "</span></div>" +
+      '<div class="grand"><span>' + t.total + " (USD)</span><span>" + (c.pending ? t.tbc : S.money(c.grandTotal)) + "</span></div></div>" +
       '<div class="qdoc-terms"><h3>' + t.terms + "</h3><ul>" + terms.map(function (x) { return "<li>" + S.esc(x) + "</li>"; }).join("") + "</ul></div>" +
       (c.hasCoffee ? '<p class="qdoc-origin">' + t.origin + "</p>" : "") +
       "</div>" +
@@ -147,7 +186,8 @@
   }
 
   /* ---------- row for Google Sheets ---------- */
-  var HEAD = ["Fecha", "Cotización", "Preparada por", "Cliente", "Contacto", "Destino", "Detalle", "Café (lb)", "Snacks (u)", "Total (USD)", "Válida hasta", "Estado"];
+  var HEAD = ["Fecha", "Cotización", "Preparada por", "Cliente", "Contacto", "Destino", "Detalle", "Café (lb)", "Snacks (u)",
+    "Peso envío (lb)", "Valor comercial (USD)", "Ahorro (USD)", "Subtotal mayorista (USD)", "Envío (USD)", "Total (USD)", "Válida hasta", "Estado"];
   function quoteRow(q) {
     var c = q.calc;
     var detail = c.lines.map(function (l) {
@@ -156,7 +196,20 @@
         " × " + (l.price == null ? "negociable" : S.money(l.price));
     }).join("; ");
     return S.toTSV([q.fecha, q.id, q.preparedBy || "", q.cliente, q.contacto, q.destino, detail,
-      c.coffeeLb || "", c.snackU || "", c.pending ? "Por confirmar" : c.total.toFixed(2), q.validUntil, q.estado]);
+      c.coffeeLb || "", c.snackU || "", c.shipLb,
+      c.pending ? "" : c.commercialValue.toFixed(2), c.pending ? "" : c.savings.toFixed(2),
+      c.pending ? "Por confirmar" : c.total.toFixed(2), c.shipping.toFixed(2),
+      c.pending ? "Por confirmar" : c.grandTotal.toFixed(2), q.validUntil, q.estado]);
+  }
+
+  // Quotes saved before v1.3 have no retail/shipping numbers: rebuild them from their lines.
+  function upgrade(q) {
+    if (q && q.calc && q.calc.grandTotal == null) {
+      var qty = {};
+      q.calc.lines.forEach(function (l) { qty[l.id] = l.q; });
+      q.calc = compute({ qty: qty, rate: q.calc.negotiatedRate || "" });
+    }
+    return q;
   }
 
   function newId() {
@@ -189,12 +242,13 @@
       '<label class="field"><span>Destino de entrega</span><input type="text" data-f="destino" placeholder="Ciudad, estado" value="' + S.esc(form.destino) + '"></label>' +
       "</div></section>" +
       '<section class="group"><h2 class="group-title">Café · por libra</h2>' +
-      '<p class="rule">' + S.money(r) + "/lb hasta " + (B.coffee.negotiableFromLb - 1) + " lb · " + B.coffee.negotiableFromLb + " lb o más: negociable<br>" +
+      '<p class="rule">Mayorista ' + S.money(r) + "/lb hasta " + (B.coffee.negotiableFromLb - 1) + " lb · " + B.coffee.negotiableFromLb + " lb o más: negociable<br>" +
+      "Precio comercial " + S.money(commercialPerLb()) + "/lb (" + S.money(B.commercial.coffeeBagPrice) + " la bolsa de " + B.commercial.coffeeBagGrams + " g)<br>" +
       "<small>≈ " + S.money(perShot(r)) + " por shot (9 g) · " + S.money(perBev(r)) + " por bebida (18 g)</small></p>" +
       coffee.map(function (p) { return rowHTML(p, 5, "lb"); }).join("") +
       '<div id="neg-slot"></div></section>' +
       '<section class="group"><h2 class="group-title">Snacks · por unidad</h2>' +
-      '<p class="rule">Mínimo ' + B.snacks.minimumUnits + " u en total · " + tiersSentence(T.es) + "</p>" +
+      '<p class="rule">Mínimo ' + B.snacks.minimumUnits + " u en total · " + tiersSentence(T.es) + "<br>Precio comercial " + S.money(B.commercial.snackUnitPrice) + " c/u</p>" +
       snacks.map(function (p) { return rowHTML(p, 5, "u"); }).join("") +
       '<div id="snack-slot"></div></section>' +
       '<section class="group"><h2 class="group-title">Idioma del PDF</h2>' +
@@ -237,12 +291,18 @@
           (l.price == null ? "negociable" : S.money(l.price)) + "</small></span><strong>" + (l.total == null ? "Por confirmar" : S.money(l.total)) + "</strong></li>";
       }).join("") + "</ul>" +
         '<div class="totals">' +
-        (c.hasCoffee ? "<div><span>Café · " + S.num(c.coffeeLb) + " lb</span><span>" + (c.coffeeRate == null ? "Por confirmar" : S.money(c.coffeeSub)) + "</span></div>" : "") +
-        (c.hasSnacks ? "<div><span>Snacks · " + S.num(c.snackU) + " u</span><span>" + (c.snackRate == null ? "—" : S.money(c.snackSub)) + "</span></div>" : "") +
-        '<div class="grand"><span>Total</span><span>' + (c.pending ? (c.total ? S.money(c.total) + " + café por confirmar" : "Por confirmar") : S.money(c.total)) + "</span></div></div>" +
+        (!c.pending && c.savings > 0 ?
+          '<div class="muted-row"><span>Valor comercial</span><span>' + S.money(c.commercialValue) + "</span></div>" +
+          '<div class="save-row"><span>Ahorro mayorista</span><span>−' + S.money(c.savings) + " (" + pct(c.savingsPct) + ")</span></div>" : "") +
+        "<div><span>Subtotal mayorista</span><span>" + (c.pending ? (c.total ? S.money(c.total) + " + café por confirmar" : "Por confirmar") : S.money(c.total)) + "</span></div>" +
+        "<div><span>Envío · " + c.shipLb + " lb</span><span>" + S.money(c.shipping) + "</span></div>" +
+        '<div class="grand"><span>Total</span><span>' + (c.pending ? "Por confirmar" : S.money(c.grandTotal)) + "</span></div></div>" +
+        '<p class="muted small">Envío: ' + S.money(B.shipping.flatFee) + " hasta " + B.shipping.includedLb + " lb + " + S.money(B.shipping.perExtraLb) +
+        " por lb adicional. Peso: " + (c.hasCoffee && c.hasSnacks ? "café " + S.num(c.coffeeLb) + " lb + snacks " + S.num(S.round2(c.weightLb - c.coffeeLb)) + " lb = " : "") +
+        S.num(c.weightLb) + " lb" + (c.weightLb !== c.shipLb ? ", redondeado a " + c.shipLb + " lb" : "") + ".</p>" +
         '<p class="muted small">Entrega: ' + B.leadTimeBusinessDays + " días hábiles · Válida " + B.validityCalendarDays + " días calendario</p>";
 
-      fTotal.textContent = !c.lines.length ? "—" : c.pending ? "Por confirmar" : S.money(c.total);
+      fTotal.textContent = !c.lines.length ? "—" : c.pending ? "Por confirmar" : S.money(c.grandTotal);
       gen.disabled = !c.canQuote;
     }
 
@@ -291,7 +351,7 @@
   /* ---------- 2. Quote ready: copy + PDF ---------- */
   function currentQuote() {
     var id = S.store.get(CURRENT, null), log = S.store.get(QUOTES, []);
-    for (var i = log.length - 1; i >= 0; i--) if (log[i].id === id) return { q: log[i], log: log, i: i };
+    for (var i = log.length - 1; i >= 0; i--) if (log[i].id === id) return { q: upgrade(log[i]), log: log, i: i };
     return null;
   }
 
@@ -305,13 +365,14 @@
       '<div class="done-badge">' + S.icon("check") + "</div>" +
       '<h1 class="display center">Cotización lista</h1>' +
       '<p class="lead center">' + S.esc(q.id) + (q.cliente ? " · " + S.esc(q.cliente) : "") + "<br>" +
-      "Total: <strong>" + (q.calc.pending ? "Por confirmar" : S.money(q.calc.total)) + "</strong> · válida hasta el " + S.esc(S.fmtShort(q.validUntil)) + "</p>" +
+      "Total: <strong>" + (q.calc.pending ? "Por confirmar" : S.money(q.calc.grandTotal)) + "</strong> · válida hasta el " + S.esc(S.fmtShort(q.validUntil)) + "</p>" +
       '<div class="segmented two slim" role="radiogroup" aria-label="Idioma del PDF">' +
       '<label><input type="radio" name="qlang" value="es"' + (q.lang === "es" ? " checked" : "") + "><span>PDF en español</span></label>" +
       '<label><input type="radio" name="qlang" value="en"' + (q.lang !== "es" ? " checked" : "") + "><span>PDF in English</span></label></div>" +
       '<button type="button" class="btn btn-accent btn-xl btn-block" id="share">' + S.icon("share") + "<span>Enviar PDF</span></button>" +
       '<p class="muted center">Se abre el menú para mandarlo por <strong>WhatsApp</strong>, correo o guardarlo en Archivos.</p>' +
       '<button type="button" class="btn btn-primary btn-lg btn-block" id="copy">' + S.icon("copy") + "<span>Copiar fila para la hoja</span></button>" +
+      (C.quotesSheetUrl ? '<a class="link-btn block-link" href="' + S.esc(C.quotesSheetUrl) + '" target="_blank" rel="noopener">' + S.icon("sheet") + "Abrir hoja · pestaña Cotizaciones</a>" : "") +
       '<div class="preview" id="preview">' + quoteDoc(q) + "</div>" +
       '<div class="row-actions">' +
       '<button type="button" class="link-btn" id="download">' + S.icon("download") + "Descargar PDF</button> &nbsp; " +
@@ -433,44 +494,58 @@
     right.forEach(function (r, i) { font(r[1], 10, col.ink); doc.text(tx(r[0]), M + 280, y + 15 + i * 14); });
     y = y + 15 + Math.max(left.length, right.length) * 14 + 16;
 
-    // line items
-    var X = { qty: 360, price: 470, total: W - M };
+    // line items: product | qty | retail (struck through) | wholesale | total
+    var X = { qty: 292, com: 382, price: 470, total: W - M };
     label(t.product, M, y);
     label(t.qty, X.qty, y, "right");
-    label(t.unitPrice, X.price, y, "right");
+    label(t.retail, X.com, y, "right");
+    label(t.wholesale, X.price, y, "right");
     label(t.lineTotal, X.total, y, "right");
     doc.setDrawColor(col.forest); doc.setLineWidth(1.5); doc.line(M, y + 7, W - M, y + 7);
     y += 7;
     c.lines.forEach(function (l) {
-      var desc = doc.splitTextToSize(tx(l[q.lang] || l.en), 230);
-      var price = l.price == null ? doc.splitTextToSize(tx(t.negotiable), 95)
-        : [S.money(l.price) + " " + (l.kind === "coffee" ? t.perLb : t.perU)];
+      var per = l.kind === "coffee" ? t.perLb : t.perU;
+      var desc = doc.splitTextToSize(tx(l[q.lang] || l.en), 185);
+      var price = l.price == null ? doc.splitTextToSize(tx(t.negotiable), 80) : [S.money(l.price) + " " + per];
       var rowH = Math.max(34, 20 + desc.length * 11, 18 + price.length * 11);
       var ty = y + 17;
       font("bold", 10.5, col.ink); doc.text(tx(l.name), M, ty);
       font("normal", 8.5, col.soft); doc.text(desc, M, ty + 12);
       font("normal", 10, col.ink); doc.text(S.num(l.q) + " " + (l.kind === "coffee" ? "lb" : t.u), X.qty, ty, { align: "right" });
+      var com = S.money(l.commercial) + " " + per;
+      font("normal", 9.5, col.soft); doc.text(com, X.com, ty, { align: "right" });
+      var cw = doc.getTextWidth(com);
+      doc.setDrawColor(col.soft); doc.setLineWidth(0.7); doc.line(X.com - cw, ty - 3.2, X.com, ty - 3.2);
       if (l.price == null) { font("bold", 8.5, col.terra); doc.text(price, X.price, ty, { align: "right" }); }
-      else { font("normal", 10, col.ink); doc.text(price, X.price, ty, { align: "right" }); }
+      else { font("bold", 10, col.forest); doc.text(price, X.price, ty, { align: "right" }); }
       if (l.total == null) { font("bold", 9, col.terra); doc.text(tx(t.tbc), X.total, ty, { align: "right" }); }
       else { font("bold", 10, col.ink); doc.text(S.money(l.total), X.total, ty, { align: "right" }); }
       y += rowH;
       doc.setDrawColor(col.line); doc.setLineWidth(0.8); doc.line(M, y, W - M, y);
     });
 
-    // totals
-    y += 20;
-    var bx = W - M - 230;
-    if (c.hasCoffee && c.hasSnacks) {
-      font("normal", 10, col.ink);
-      doc.text(tx(t.coffeeSub), bx + 10, y); doc.text(c.coffeeRate == null ? tx(t.tbc) : S.money(c.coffeeSub), W - M - 10, y, { align: "right" });
+    // totals (right) + savings banner (left)
+    y += 22;
+    var bw = 250, bx = W - M - bw, rx = W - M - 10, top = y;
+    function row(lbl, val, color, style) {
+      font(style || "normal", 10, color || col.ink);
+      doc.text(tx(lbl), bx + 10, y); doc.text(tx(val), rx, y, { align: "right" });
       y += 16;
-      doc.text(tx(t.snackSub), bx + 10, y); doc.text(S.money(c.snackSub), W - M - 10, y, { align: "right" });
-      y += 10;
-    } else y -= 10;
-    doc.setFillColor(col.kraft); doc.roundedRect(bx, y, 230, 30, 4, 4, "F");
+    }
+    if (!c.pending && c.savings > 0) {
+      row(t.retailValue, S.money(c.commercialValue), col.soft);
+      row(t.savings, "-" + S.money(c.savings) + " (" + pct(c.savingsPct) + ")", col.forest, "bold");
+      doc.setFillColor("#E3EBD3"); doc.roundedRect(M, top - 13, 205, 44, 5, 5, "F");
+      font("bold", 11, col.forest);
+      var ban = doc.splitTextToSize(tx(t.saveBanner(S.money(c.savings), pct(c.savingsPct))), 185);
+      doc.text(ban, M + 10, ban.length > 1 ? top + 5 : top + 12);
+    }
+    row(t.subtotal, c.pending ? t.tbc : S.money(c.total));
+    row(t.shipping + " (" + c.shipLb + " lb)", S.money(c.shipping));
+    y -= 6;
+    doc.setFillColor(col.kraft); doc.roundedRect(bx, y, bw, 30, 4, 4, "F");
     font("bold", 12, col.forest); doc.text(tx(t.total).toUpperCase() + " (USD)", bx + 10, y + 19.5);
-    font("bold", 13, col.forest); doc.text(c.pending ? tx(t.tbc) : S.money(c.total), W - M - 10, y + 19.5, { align: "right" });
+    font("bold", 13, col.forest); doc.text(c.pending ? tx(t.tbc) : S.money(c.grandTotal), rx, y + 19.5, { align: "right" });
     y += 56;
 
     // terms
